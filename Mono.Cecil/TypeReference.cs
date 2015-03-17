@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -135,7 +135,7 @@ namespace Mono.Cecil {
 				if (generic_parameters != null)
 					return generic_parameters;
 
-				return generic_parameters = new Collection<GenericParameter> ();
+				return generic_parameters = new GenericParameterCollection (this);
 			}
 		}
 
@@ -146,6 +146,15 @@ namespace Mono.Cecil {
 					return declaring_type.Scope;
 
 				return scope;
+			}
+			set {
+				var declaring_type = this.DeclaringType;
+				if (declaring_type != null) {
+					declaring_type.Scope = value;
+					return;
+				}
+
+				scope = value;
 			}
 		}
 
@@ -166,13 +175,12 @@ namespace Mono.Cecil {
 				if (fullname != null)
 					return fullname;
 
+				fullname = this.TypeFullName ();
+
 				if (IsNested)
-					return fullname = DeclaringType.FullName + "/" + Name;
+					fullname = DeclaringType.FullName + "/" + fullname;
 
-				if (string.IsNullOrEmpty (@namespace))
-					return fullname = Name;
-
-				return fullname = @namespace + "." + Name;
+				return fullname;
 			}
 		}
 
@@ -216,28 +224,8 @@ namespace Mono.Cecil {
 			get { return false; }
 		}
 
-		public bool IsPrimitive {
-			get {
-				switch (etype) {
-				case ElementType.Boolean:
-				case ElementType.Char:
-				case ElementType.I:
-				case ElementType.U:
-				case ElementType.I1:
-				case ElementType.U1:
-				case ElementType.I2:
-				case ElementType.U2:
-				case ElementType.I4:
-				case ElementType.U4:
-				case ElementType.I8:
-				case ElementType.U8:
-				case ElementType.R4:
-				case ElementType.R8:
-					return true;
-				default:
-					return false;
-				}
-			}
+		public virtual bool IsPrimitive {
+			get { return etype.IsPrimitive (); }
 		}
 
 		public virtual MetadataType MetadataType {
@@ -287,6 +275,36 @@ namespace Mono.Cecil {
 	}
 
 	static partial class Mixin {
+
+		public static bool IsPrimitive (this ElementType self)
+		{
+			switch (self) {
+			case ElementType.Boolean:
+			case ElementType.Char:
+			case ElementType.I:
+			case ElementType.U:
+			case ElementType.I1:
+			case ElementType.U1:
+			case ElementType.I2:
+			case ElementType.U2:
+			case ElementType.I4:
+			case ElementType.U4:
+			case ElementType.I8:
+			case ElementType.U8:
+			case ElementType.R4:
+			case ElementType.R8:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		public static string TypeFullName (this TypeReference self)
+		{
+			return string.IsNullOrEmpty (self.Namespace)
+				? self.Name
+				: self.Namespace + '.' + self.Name;
+		}
 
 		public static bool IsTypeOf (this TypeReference self, string @namespace, string name)
 		{

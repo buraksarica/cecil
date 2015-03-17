@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -82,7 +82,7 @@ namespace Mono.Cecil {
 		public static void WriteModuleTo (ModuleDefinition module, Stream stream, WriterParameters parameters)
 		{
 			if ((module.Attributes & ModuleAttributes.ILOnly) == 0)
-				throw new ArgumentException ();
+				throw new NotSupportedException ("Writing mixed-mode assemblies is not supported");
 
 			if (module.HasImage && module.ReadingMode == ReadingMode.Deferred)
 				ImmediateModuleReader.ReadModule (module);
@@ -97,20 +97,18 @@ namespace Mono.Cecil {
 			var symbol_writer = GetSymbolWriter (module, fq_name, symbol_writer_provider);
 
 #if !SILVERLIGHT && !CF
-			if (parameters.StrongNameKeyPair != null && name != null)
+			if (parameters.StrongNameKeyPair != null && name != null) {
 				name.PublicKey = parameters.StrongNameKeyPair.PublicKey;
-#endif
-
-			if (name != null && name.HasPublicKey)
 				module.Attributes |= ModuleAttributes.StrongNameSigned;
-
+			}
+#endif
 			var metadata = new MetadataBuilder (module, fq_name,
 				symbol_writer_provider, symbol_writer);
 
 			BuildMetadata (module, metadata);
 
-			if (module.SymbolReader != null)
-				module.SymbolReader.Dispose ();
+			if (module.symbol_reader != null)
+				module.symbol_reader.Dispose ();
 
 			var writer = ImageWriter.CreateWriter (module, metadata, stream);
 
@@ -786,7 +784,7 @@ namespace Mono.Cecil {
 		TextMap CreateTextMap ()
 		{
 			var map = new TextMap ();
-			map.AddMap (TextSegment.ImportAddressTable, module.Architecture == TargetArchitecture.I386 ? 8 : 16);
+			map.AddMap (TextSegment.ImportAddressTable, module.Architecture == TargetArchitecture.I386 ? 8 : 0);
 			map.AddMap (TextSegment.CLIHeader, 0x48, 8);
 			return map;
 		}
@@ -935,11 +933,13 @@ namespace Mono.Cecil {
 					? reference.PublicKeyToken
 					: reference.PublicKey;
 
+				var version = reference.Version;
+
 				var rid = table.AddRow (new AssemblyRefRow (
-					(ushort) reference.Version.Major,
-					(ushort) reference.Version.Minor,
-					(ushort) reference.Version.Build,
-					(ushort) reference.Version.Revision,
+					(ushort) version.Major,
+					(ushort) version.Minor,
+					(ushort) version.Build,
+					(ushort) version.Revision,
 					reference.Attributes,
 					GetBlobIndex (key_or_token),
 					GetStringIndex (reference.Name),
@@ -1175,14 +1175,25 @@ namespace Mono.Cecil {
 
 		TypeRefRow CreateTypeRefRow (TypeReference type)
 		{
-			var scope_token = type.IsNested
-				? GetTypeRefToken (type.DeclaringType)
-				: type.Scope.MetadataToken;
+			var scope_token = GetScopeToken (type);
 
 			return new TypeRefRow (
 				MakeCodedRID (scope_token, CodedIndex.ResolutionScope),
 				GetStringIndex (type.Name),
 				GetStringIndex (type.Namespace));
+		}
+
+		MetadataToken GetScopeToken (TypeReference type)
+		{
+			if (type.IsNested)
+				return GetTypeRefToken (type.DeclaringType);
+
+			var scope = type.Scope;
+
+			if (scope == null)
+				return MetadataToken.Zero;
+
+			return scope.MetadataToken;
 		}
 
 		static CodedRID MakeCodedRID (IMetadataTokenProvider provider, CodedIndex index)
@@ -1456,7 +1467,7 @@ namespace Mono.Cecil {
 		{
 			var pinvoke = method.PInvokeInfo;
 			if (pinvoke == null)
-				throw new ArgumentException ();
+				return;
 
 			var table = GetTable<ImplMapTable> (Table.ImplMap);
 			table.AddRow (new ImplMapRow (
@@ -1640,6 +1651,11 @@ namespace Mono.Cecil {
 			case ElementType.Var:
 				return ElementType.Class;
 			case ElementType.GenericInst:
+				var generic_instance = (GenericInstanceType) constant_type;
+				if (generic_instance.ElementType.IsTypeOf ("System", "Nullable`1"))
+					return GetConstantType (generic_instance.GenericArguments [0], constant);
+
+				return GetConstantType (((TypeSpecification) constant_type).ElementType, constant);
 			case ElementType.CModOpt:
 			case ElementType.CModReqD:
 			case ElementType.ByRef:
@@ -2448,12 +2464,12 @@ namespace Mono.Cecil {
 			var count = GetNamedArgumentCount (attribute);
 
 			if (count == 0) {
-				WriteCompressedUInt32 (0); // length
+				WriteCompressedUInt32 (1); // length
 				WriteCompressedUInt32 (0); // count
 				return;
 			}
 
-            var buffer = new SignatureWriter (metadata);
+			var buffer = new SignatureWriter (metadata);
 			buffer.WriteCompressedUInt32 ((uint) count);
 			buffer.WriteICustomAttributeNamedArguments (attribute);
 

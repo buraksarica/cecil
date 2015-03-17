@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -26,6 +26,8 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System.Threading;
+
 using Mono.Collections.Generic;
 
 namespace Mono.Cecil {
@@ -46,13 +48,22 @@ namespace Mono.Cecil {
 		}
 
 		internal ParameterDefinition Parameter {
-			get { return parameter ?? (parameter = new ParameterDefinition (return_type)); }
-			set { parameter = value; }
+			get {
+				if (parameter == null)
+					Interlocked.CompareExchange (ref parameter, new ParameterDefinition (return_type, method), null);
+
+				return parameter;
+			}
 		}
 
 		public MetadataToken MetadataToken {
 			get { return Parameter.MetadataToken; }
 			set { Parameter.MetadataToken = value; }
+		}
+
+		public ParameterAttributes Attributes {
+			get { return Parameter.Attributes; }
+			set { Parameter.Attributes = value; }
 		}
 
 		public bool HasCustomAttributes {

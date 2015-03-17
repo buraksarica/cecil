@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -51,6 +51,9 @@ namespace Mono.Cecil {
 		}
 	}
 
+#if !SILVERLIGHT && !CF
+	[Serializable]
+#endif
 	public class AssemblyResolutionException : FileNotFoundException {
 
 		readonly AssemblyNameReference reference;
@@ -64,6 +67,15 @@ namespace Mono.Cecil {
 		{
 			this.reference = reference;
 		}
+
+#if !SILVERLIGHT && !CF
+		protected AssemblyResolutionException (
+			System.Runtime.Serialization.SerializationInfo info,
+			System.Runtime.Serialization.StreamingContext context)
+			: base (info, context)
+		{
+		}
+#endif
 	}
 
 	public abstract class BaseAssemblyResolver : IAssemblyResolver {
@@ -138,6 +150,13 @@ namespace Mono.Cecil {
 				return assembly;
 
 #if !SILVERLIGHT && !CF
+			if (name.IsRetargetable) {
+				// if the reference is retargetable, zero it
+				name = new AssemblyNameReference (name.Name, new Version (0, 0, 0, 0)) {
+					PublicKeyToken = Empty<byte>.Array,
+				};
+			}
+
 			var framework_dir = Path.GetDirectoryName (typeof (object).Module.FullyQualifiedName);
 
 			if (IsZero (name.Version)) {
@@ -316,7 +335,7 @@ namespace Mono.Cecil {
 
 		AssemblyDefinition GetAssemblyInNetGac (AssemblyNameReference reference, ReaderParameters parameters)
 		{
-			var gacs = new [] { "GAC_MSIL", "GAC_32", "GAC" };
+			var gacs = new [] { "GAC_MSIL", "GAC_32", "GAC_64", "GAC" };
 			var prefixes = new [] { string.Empty, "v4.0_" };
 
 			for (int i = 0; i < 2; i++) {

@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -29,6 +29,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+
+using Mono.Cecil;
 
 namespace Mono.Collections.Generic {
 
@@ -57,6 +59,16 @@ namespace Mono.Collections.Generic {
 				OnSet (value, index);
 
 				items [index] = value;
+			}
+		}
+
+		public int Capacity {
+			get { return items.Length; }
+			set {
+				if (value < 0 || value < size)
+					throw new ArgumentOutOfRangeException ();
+
+				Resize (value);
 			}
 		}
 
@@ -115,6 +127,9 @@ namespace Mono.Collections.Generic {
 
 		public Collection (ICollection<T> items)
 		{
+			if (items == null)
+				throw new ArgumentNullException ("items");
+
 			this.items = new T [items.Count];
 			items.CopyTo (this.items, 0);
 			this.size = this.items.Length;
@@ -256,13 +271,17 @@ namespace Mono.Collections.Generic {
 				System.Math.Max (items.Length * 2, default_capacity),
 				new_size);
 
-#if !CF
-			Array.Resize (ref items, new_size);
-#else
-			var array = new T [new_size];
-			Array.Copy (items, array, size);
-			items = array;
-#endif
+			Resize (new_size);
+		}
+
+		protected void Resize (int new_size)
+		{
+			if (new_size == size)
+				return;
+			if (new_size < size)
+				throw new ArgumentOutOfRangeException ();
+
+			items = items.Resize (new_size);
 		}
 
 		int IList.Add (object value)

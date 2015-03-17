@@ -4,7 +4,7 @@
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2010 Jb Evain
+// Copyright (c) 2008 - 2011 Jb Evain
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -49,9 +49,18 @@ namespace Mono.Cecil {
 			get { return method; }
 		}
 
+		public int Sequence {
+			get {
+				if (method == null)
+					return -1;
+
+				return method.HasImplicitThis () ? index + 1 : index;
+			}
+		}
+
 		public bool HasConstant {
 			get {
-				ResolveConstant ();
+				this.ResolveConstant (ref constant, parameter_type.Module);
 
 				return constant != Mixin.NoValue;
 			}
@@ -61,14 +70,6 @@ namespace Mono.Cecil {
 		public object Constant {
 			get { return HasConstant ? constant : null;	}
 			set { constant = value; }
-		}
-
-		void ResolveConstant ()
-		{
-			if (constant != Mixin.NotResolved)
-				return;
-
-			this.ResolveConstant (ref constant, parameter_type.Module);
 		}
 
 		public bool HasCustomAttributes {
@@ -81,7 +82,7 @@ namespace Mono.Cecil {
 		}
 
 		public Collection<CustomAttribute> CustomAttributes {
-			get { return custom_attributes ?? (custom_attributes = this.GetCustomAttributes (parameter_type.Module)); }
+			get { return custom_attributes ?? (this.GetCustomAttributes (ref custom_attributes, parameter_type.Module)); }
 		}
 
 		public bool HasMarshalInfo {
@@ -94,7 +95,7 @@ namespace Mono.Cecil {
 		}
 
 		public MarshalInfo MarshalInfo {
-			get { return marshal_info ?? (marshal_info = this.GetMarshalInfo (parameter_type.Module)); }
+			get { return marshal_info ?? (this.GetMarshalInfo (ref marshal_info, parameter_type.Module)); }
 			set { marshal_info = value; }
 		}
 
@@ -136,6 +137,12 @@ namespace Mono.Cecil {
 		}
 
 		#endregion
+
+		internal ParameterDefinition (TypeReference parameterType, IMethodSignature method)
+			: this (string.Empty, ParameterAttributes.None, parameterType)
+		{
+			this.method = method;
+		}
 
 		public ParameterDefinition (TypeReference parameterType)
 			: this (string.Empty, ParameterAttributes.None, parameterType)
